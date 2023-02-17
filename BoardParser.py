@@ -13,16 +13,32 @@ class BoardParser:
         self.engine = ConvEngine()
         self.engine.load_models_from_files('./ready_models/board_model.h5', './ready_models/piece_model.h5')
         self.stockfish = Stockfish(path="../stockfish/stockfish-windows-2022-x86-64-avx2.exe")
+        self.stockfish_evaluating = Stockfish(path="../stockfish/stockfish-windows-2022-x86-64-avx2.exe")
         self.legal_moves = 0
         self.illegal_moves = 0
-        self.game_history = list()
+        self.last_move_type = 0
+        self.proposed_move = None
         self.evals = list()
+        self.illegal_choices = list()
+        
+        self.stockfish.set_elo_rating(2600)
+        self.stockfish_evaluating.set_elo_rating(2800)
 
     def update_move(self, san: str) -> None:
+        print(f'{self.legal_moves} vs {self.illegal_moves}')
         self.board.push_san(san)
         self.move_counter += 1
 
-        print(self.stockfish.get_evaluation())
+        self.stockfish.set_fen_position(self.get_position_as_fen())
+        self.stockfish_evaluating.set_fen_position(self.get_position_as_fen())
+        evaluation = self.stockfish.get_evaluation()
+
+        if evaluation['type'] == 'cp': 
+            self.evals.append(dict(type=self.last_move_type, evaluation=evaluation['value'], notes='normal_move'))
+        else:
+            self.evals.append(dict(type=self.last_move_type, evaluation=1000, notes='mate'))
+
+        print(evaluation)
         self.print_board()
 
     def get_engine_move(self) -> str:
@@ -30,45 +46,31 @@ class BoardParser:
         # find where piece is now
         piece_possible_positions = self.find_piece_type_positions(piece_and_square['piece'])
         
-        # print(self.board.legal_moves)
-
-        print(f'{self.legal_moves} vs {self.illegal_moves}')
+        local_illegal_choices = list()
 
         for piece_possible_position in piece_possible_positions:
-        # concat starting and ending position to form san
+            # concat starting and ending position to form san
             san_move = piece_possible_position + piece_and_square['square']
-
-            print(san_move)
 
             if piece_possible_position != piece_and_square['square'] and chess.Move.from_uci(san_move) in self.board.legal_moves:
                 self.legal_moves += 1
-                self.game_history.append(1)
-
-                self.stockfish.set_fen_position(self.get_position_as_fen())
-                eval_dict = self.stockfish.get_evaluation()
-                if eval_dict['type'] == 'cp':
-                    self.evals.append(eval_dict['value'])
-                else:
-                    self.evals.append(10000)
-
+                self.last_move_type = 1
+                self.proposed_move = san_move
                 return san_move
+            else:
+                self.proposed_move = san_move
+                local_illegal_choices.append(dict(position=self.get_position_as_fen(), move=san_move))
 
         # here return stockfish substitution move
         print('No legal moves generated, Stockfish will play substitution')
 
+        self.illegal_choices += local_illegal_choices
+
         self.illegal_moves += 1
+        self.last_move_type = 2
 
         self.stockfish.set_fen_position(self.get_position_as_fen())
         best_move_by_stockfish = self.stockfish.get_best_move()
-
-        self.game_history.append(2)
-
-        eval_dict = self.stockfish.get_evaluation()
-        if eval_dict['type'] == 'cp':
-            self.evals.append(eval_dict['value'])
-        else:
-            print(eval_dict)
-            self.evals.append(10000)
 
         return best_move_by_stockfish
 
@@ -76,12 +78,7 @@ class BoardParser:
         self.stockfish.set_fen_position(self.get_position_as_fen())
         best_move_by_stockfish = self.stockfish.get_best_move()
 
-        self.game_history.append(0)                
-        eval_dict = self.stockfish.get_evaluation()
-        if eval_dict['type'] == 'cp':
-            self.evals.append(eval_dict['value'])
-        else:
-            self.evals.append(10000)
+        self.last_move_type=0
 
         return best_move_by_stockfish
 
@@ -101,8 +98,7 @@ class BoardParser:
         return positions
 
     def print_board(self) -> None:
-        print(self.board)
-        print('\n')
+        print(self.stockfish.get_board_visual())
 
     def set_position_from_fen(self, fen: str) -> None:
         self.board = chess.Board(fen)
