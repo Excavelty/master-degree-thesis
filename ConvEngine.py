@@ -41,14 +41,30 @@ class ConvEngine(Engine):
         cnn_channels = self.get_cnn_channels(fen)
 
         result_squares_list = list(self.model_board.predict(np.array([cnn_channels]))[0])
-        result_square = result_squares_list.index(max(result_squares_list))
+        best_result_squares_indices = list(np.argsort(result_squares_list)[61:])
+        best_result_squares_indices.reverse()
+        # print(best_result_squares_indices)
 
-        square = self.board_utility.square_index_to_pos(result_square)
+        # result_square = result_squares_list.index(max(result_squares_list))
+        # print(result_square)
 
-        result_piece = list(self.model_piece(np.array([cnn_channels]))[0])
-        print(max(result_piece))
-        piece_index = result_piece.index(max(result_piece))
-        piece = self.index_to_piece[piece_index]
+        squares = list()
+        for square_index in best_result_squares_indices:
+            squares.append(self.board_utility.square_index_to_pos(square_index))
+
+        # square = self.board_utility.square_index_to_pos(result_square)
+
+        result_pieces = list(self.model_piece(np.array([cnn_channels]))[0])
+        
+        best_result_pieces_indices = list(np.argsort(result_pieces)[4:])
+        best_result_pieces_indices.reverse()
+        pieces = list()
+        for piece_index in best_result_pieces_indices:
+            pieces.append(self.index_to_piece[piece_index])
+
+        # print(max(result_piece))
+        # piece_index = result_piece.index(max(result_piece))
+        # piece = self.index_to_piece[piece_index]
 
         self.previous_third = self.previous_second
         self.previous_second = self.previous_first
@@ -56,7 +72,7 @@ class ConvEngine(Engine):
 
         self.last_layer = 0.25 * self.previous_third + 0.5 * self.previous_second + 1. * self.previous_first
 
-        return dict(piece=piece, square=square)
+        return dict(pieces=pieces, squares=squares)
 
     def from_fen_to_cnn_channels(self, fen):
         ascii_position = self.fen_to_ascii_position(fen)

@@ -21,7 +21,7 @@ class BoardParser:
         self.evals = list()
         self.illegal_choices = list()
         
-        self.stockfish.set_elo_rating(2600)
+        self.stockfish.set_elo_rating(600)
         self.stockfish_evaluating.set_elo_rating(2800)
 
     def update_move(self, san: str) -> None:
@@ -42,24 +42,28 @@ class BoardParser:
         self.print_board()
 
     def get_engine_move(self) -> str:
-        piece_and_square = self.engine.predict_next_move(self.get_position_as_fen())
-        # find where piece is now
-        piece_possible_positions = self.find_piece_type_positions(piece_and_square['piece'])
-        
-        local_illegal_choices = list()
+        pieces_and_squares = self.engine.predict_next_move(self.get_position_as_fen())
 
-        for piece_possible_position in piece_possible_positions:
-            # concat starting and ending position to form san
-            san_move = piece_possible_position + piece_and_square['square']
+        for piece in pieces_and_squares['pieces']:
+            for square in pieces_and_squares['squares']:
+                piece_and_square = dict(piece=piece, square=square)
+                # find where piece is now
+                piece_possible_positions = self.find_piece_type_positions(piece_and_square['piece'])
+                
+                local_illegal_choices = list()
 
-            if piece_possible_position != piece_and_square['square'] and chess.Move.from_uci(san_move) in self.board.legal_moves:
-                self.legal_moves += 1
-                self.last_move_type = 1
-                self.proposed_move = san_move
-                return san_move
-            else:
-                self.proposed_move = san_move
-                local_illegal_choices.append(dict(position=self.get_position_as_fen(), move=san_move))
+                for piece_possible_position in piece_possible_positions:
+                    # concat starting and ending position to form san
+                    san_move = piece_possible_position + piece_and_square['square']
+
+                    if piece_possible_position != piece_and_square['square'] and chess.Move.from_uci(san_move) in self.board.legal_moves:
+                        self.legal_moves += 1
+                        self.last_move_type = 1
+                        self.proposed_move = san_move
+                        return san_move
+                    else:
+                        self.proposed_move = san_move
+                        local_illegal_choices.append(dict(position=self.get_position_as_fen(), move=san_move))
 
         # here return stockfish substitution move
         print('No legal moves generated, Stockfish will play substitution')
